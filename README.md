@@ -28,15 +28,35 @@ Written to `config/pearlkeeper.json` on first run:
 
 ## Building
 
+Needs JDK 21 and an internet connection (Gradle downloads Minecraft and the Fabric toolchain on the
+first run).
+
 ```sh
-./gradlew build
+git clone https://github.com/TTT-1233/Minecraft-mod.git
+cd Minecraft-mod
+./gradlew build          # gradlew.bat build on Windows
 ```
 
-The jar lands in `build/libs/`. Drop it in the server's (or client's) `mods/` folder alongside
-Fabric API.
+The mod jar lands in `build/libs/pearlkeeper-1.0.0.jar`. Ignore the `-sources` jar next to it.
 
-The Gradle wrapper jar is not committed. Run `gradle wrapper` once with a local Gradle install to
-generate it, or just use your own `gradle build`.
+## Installing
+
+1. Install the **Fabric Loader** for your Minecraft version — <https://fabricmc.net/use/installer/>.
+   On a dedicated server, use the installer's *Server* tab to produce the Fabric server jar.
+2. Download **Fabric API** for the same Minecraft version from
+   <https://modrinth.com/mod/fabric-api> and put it in `mods/`.
+3. Put `pearlkeeper-1.0.0.jar` in `mods/` as well.
+   - Dedicated server: the `mods/` folder next to the server jar.
+   - Singleplayer / LAN: `.minecraft/mods` (`%appdata%\.minecraft\mods` on Windows,
+     `~/Library/Application Support/minecraft/mods` on macOS).
+4. Start the server (or the game with the Fabric profile). The log should show
+   `Loading 2 mods: fabric-api, pearlkeeper`, and `config/pearlkeeper.json` appears on first run.
+
+Players joining a server that runs this mod do **not** need to install anything.
+
+To check it works: throw a pearl, disconnect while it is still in the air, log back in, and about a
+second later the pearl resumes its flight — the log prints `Froze 1 ender pearl(s)` on the way out
+and `Restored 1 ender pearl(s)` on the way back.
 
 ## Version coordinates
 
