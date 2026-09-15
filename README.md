@@ -60,10 +60,12 @@ and `Restored 1 ender pearl(s)` on the way back.
 
 ## Version coordinates
 
-This was written for **Minecraft 1.26.2 / Fabric Loader 0.19.5**. The build numbers in
-`gradle.properties` — `yarn_mappings`, `fabric_version` and `loom_version` — are the pieces that
-change between releases. Look the current ones up at <https://fabricmc.net/develop/> and adjust
-before the first build if Gradle complains it cannot resolve them.
+This was written for **Minecraft 26.2 / Fabric Loader 0.19.5 / Loom 1.17**. All of those live in
+`gradle.properties`; if Gradle says it cannot resolve one of them, look the current values up at
+<https://fabricmc.net/develop/> and update that file.
+
+`yarn_mappings` is set to `26.2+build.+`, which tells Gradle to take the newest Yarn build for
+26.2 rather than pinning a build number.
 
 ## Notes
 
