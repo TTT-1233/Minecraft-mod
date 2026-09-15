@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "pearlkeeper",
+  "version": "${version}",
+  "name": "Pearl Keeper",
+  "description": "Freezes ender pearls that are still in flight when a player leaves and resumes them, exactly where they were, when the player rejoins. Server-side only.",
+  "authors": [],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.pearlkeeper.PearlKeeper"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=21"
+  }
+}
