@@ -28,8 +28,8 @@ Written to `config/pearlkeeper.json` on first run:
 
 ## Building
 
-Needs JDK 21 and an internet connection (Gradle downloads Minecraft and the Fabric toolchain on the
-first run).
+Needs **JDK 25** — Minecraft 26.2 requires it, and Loom refuses to run on anything older — plus an
+internet connection, since Gradle downloads Minecraft and the Fabric toolchain on the first run.
 
 ```sh
 git clone https://github.com/TTT-1233/Minecraft-mod.git
