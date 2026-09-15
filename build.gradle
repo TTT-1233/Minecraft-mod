@@ -16,7 +16,8 @@ repositories {
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings loom.officialMojangMappings()
+    // No mappings: 26.2 ships unobfuscated, and neither Yarn (stops at 25w46a)
+    // nor Mojang's mapping files are published for it.
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 }
