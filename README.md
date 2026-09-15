@@ -64,8 +64,10 @@ This was written for **Minecraft 26.2 / Fabric Loader 0.19.5 / Loom 1.17**. All 
 `gradle.properties`; if Gradle says it cannot resolve one of them, look the current values up at
 <https://fabricmc.net/develop/> and update that file.
 
-`yarn_mappings` is set to `26.2+build.+`, which tells Gradle to take the newest Yarn build for
-26.2 rather than pinning a build number.
+The code uses **Mojang's official mappings** (`loom.officialMojangMappings()`), not Yarn — Yarn
+stopped publishing after `25w46a`, so there are no Yarn builds for 26.2. That means class and
+method names here are Mojang's (`ServerPlayer`, `getDeltaMovement`) rather than Yarn's
+(`ServerPlayerEntity`, `getVelocity`).
 
 ## Notes
 

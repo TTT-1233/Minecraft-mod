@@ -5,19 +5,20 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.SpawnReason;
-import net.minecraft.entity.projectile.thrown.EnderPearlEntity;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.WorldSavePath;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 /**
  * Freezes a player's in-flight ender pearls when they disconnect and puts them
@@ -46,7 +48,7 @@ public class PearlKeeper implements ModInitializer {
         config = PearlKeeperConfig.load(FabricLoader.getInstance().getConfigDir().resolve(MOD_ID + ".json"));
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            storage = new PearlStorage(server.getSavePath(WorldSavePath.ROOT).resolve(MOD_ID));
+            storage = new PearlStorage(server.getWorldPath(LevelResource.ROOT).resolve(MOD_ID));
             pendingRestores.clear();
         });
 
@@ -64,12 +66,12 @@ public class PearlKeeper implements ModInitializer {
      * Fires before the player is removed from the world, so their pearls are
      * still present and can be taken out before vanilla gets to them.
      */
-    private void onDisconnect(ServerPlayerEntity player, MinecraftServer server) {
+    private void onDisconnect(ServerPlayer player, MinecraftServer server) {
         if (!config.enabled || storage == null) {
             return;
         }
 
-        UUID playerId = player.getUuid();
+        UUID playerId = player.getUUID();
         List<StoredPearl> pearls = new ArrayList<>();
 
         // A restore that never got to run still owns the pearls in the file.
@@ -77,14 +79,17 @@ public class PearlKeeper implements ModInitializer {
             pearls.addAll(storage.load(playerId));
         }
 
-        for (ServerWorld world : server.getWorlds()) {
-            for (EnderPearlEntity pearl : world.getEntitiesByType(EntityType.ENDER_PEARL, p -> p.getOwner() == player)) {
-                Vec3d velocity = pearl.getVelocity();
+        Predicate<Entity> ownedByPlayer = entity -> entity instanceof Projectile projectile
+                && projectile.getOwner() == player;
+
+        for (ServerLevel level : server.getAllLevels()) {
+            for (Entity pearl : level.getEntities(EntityType.ENDER_PEARL, ownedByPlayer)) {
+                Vec3 velocity = pearl.getDeltaMovement();
                 pearls.add(new StoredPearl(
-                        world.getRegistryKey().getValue().toString(),
+                        level.dimension().location().toString(),
                         pearl.getX(), pearl.getY(), pearl.getZ(),
                         velocity.x, velocity.y, velocity.z,
-                        pearl.getYaw(), pearl.getPitch(),
+                        pearl.getYRot(), pearl.getXRot(),
                         System.currentTimeMillis()
                 ));
                 pearl.discard();
@@ -98,19 +103,19 @@ public class PearlKeeper implements ModInitializer {
         storage.save(playerId, pearls);
 
         if (!pearls.isEmpty()) {
-            LOGGER.info("Froze {} ender pearl(s) for {}", pearls.size(), player.getGameProfile().getName());
+            LOGGER.info("Froze {} ender pearl(s) for {}", pearls.size(), player.getName().getString());
         }
     }
 
-    private void onJoin(ServerPlayerEntity player, MinecraftServer server) {
+    private void onJoin(ServerPlayer player, MinecraftServer server) {
         if (!config.enabled || storage == null) {
             return;
         }
 
         if (config.restoreDelayTicks <= 0) {
-            restore(player.getUuid(), server);
+            restore(player.getUUID(), server);
         } else {
-            pendingRestores.add(new PendingRestore(player.getUuid(), config.restoreDelayTicks));
+            pendingRestores.add(new PendingRestore(player.getUUID(), config.restoreDelayTicks));
         }
     }
 
@@ -136,13 +141,16 @@ public class PearlKeeper implements ModInitializer {
     }
 
     private void restore(UUID playerId, MinecraftServer server) {
-        ServerPlayerEntity player = server.getPlayerManager().getPlayer(playerId);
+        ServerPlayer player = server.getPlayerList().getPlayer(playerId);
         if (player == null) {
             // Left again before the delay elapsed; the pearls stay on disk.
             return;
         }
 
         List<StoredPearl> pearls = storage.load(playerId);
+        if (pearls.isEmpty()) {
+            return;
+        }
         storage.clear(playerId);
 
         long expiryMillis = (long) (config.maxOfflineHours * 3600_000.0);
@@ -158,40 +166,40 @@ public class PearlKeeper implements ModInitializer {
         }
 
         if (restored > 0) {
-            LOGGER.info("Restored {} ender pearl(s) for {}", restored, player.getGameProfile().getName());
+            LOGGER.info("Restored {} ender pearl(s) for {}", restored, player.getName().getString());
             if (config.notifyPlayer) {
-                player.sendMessage(Text.literal("Resumed " + restored + " ender pearl" + (restored == 1 ? "" : "s")
-                        + " from where you left off."), false);
+                player.sendSystemMessage(Component.literal("Resumed " + restored + " ender pearl"
+                        + (restored == 1 ? "" : "s") + " from where you left off."));
             }
         }
     }
 
-    private boolean spawn(StoredPearl stored, ServerPlayerEntity owner, MinecraftServer server) {
-        Identifier dimensionId = Identifier.tryParse(stored.dimension());
+    private boolean spawn(StoredPearl stored, ServerPlayer owner, MinecraftServer server) {
+        ResourceLocation dimensionId = ResourceLocation.tryParse(stored.dimension());
         if (dimensionId == null) {
             return false;
         }
 
-        ServerWorld world = server.getWorld(RegistryKey.of(RegistryKeys.WORLD, dimensionId));
-        if (world == null) {
+        ServerLevel level = server.getLevel(ResourceKey.create(Registries.DIMENSION, dimensionId));
+        if (level == null) {
             LOGGER.warn("Dropping a stored pearl: dimension {} no longer exists", stored.dimension());
             return false;
         }
 
-        EnderPearlEntity pearl = EntityType.ENDER_PEARL.create(world, SpawnReason.TRIGGERED);
+        Entity pearl = EntityType.ENDER_PEARL.create(level, EntitySpawnReason.TRIGGERED);
         if (pearl == null) {
             return false;
         }
 
         // The pearl only ticks once its chunk is loaded.
-        world.getChunk(MathHelper.floor(stored.x()) >> 4, MathHelper.floor(stored.z()) >> 4);
+        level.getChunk(Mth.floor(stored.x()) >> 4, Mth.floor(stored.z()) >> 4);
 
-        pearl.setOwner(owner);
-        pearl.refreshPositionAndAngles(stored.x(), stored.y(), stored.z(), stored.yaw(), stored.pitch());
-        pearl.setVelocity(stored.velocityX(), stored.velocityY(), stored.velocityZ());
-        pearl.velocityModified = true;
+        ((Projectile) pearl).setOwner(owner);
+        pearl.moveTo(stored.x(), stored.y(), stored.z(), stored.yaw(), stored.pitch());
+        pearl.setDeltaMovement(stored.velocityX(), stored.velocityY(), stored.velocityZ());
+        pearl.hurtMarked = true;
 
-        return world.spawnEntity(pearl);
+        return level.addFreshEntity(pearl);
     }
 
     private static final class PendingRestore {
